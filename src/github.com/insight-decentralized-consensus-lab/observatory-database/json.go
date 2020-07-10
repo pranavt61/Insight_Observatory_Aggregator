@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 )
+
+var JSONServer http.Server
 
 // Blocks
 func HandleGetRecentBlocks(w http.ResponseWriter, r *http.Request) {
@@ -59,11 +62,7 @@ func HandleGetRangeBlocks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Printf("MIN: %d - MAX: %d\n", min_height, max_height)
-
 	var blocks []BlockMessage = SQLSelectRangeBlocks(min_height, max_height)
-
-	fmt.Println(blocks)
 
 	var blocks_json []byte
 	blocks_json, err = json.Marshal(blocks)
@@ -73,6 +72,80 @@ func HandleGetRangeBlocks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, string(blocks_json))
+}
+
+func HandleGetHashBlocks(w http.ResponseWriter, r *http.Request) {
+	var err error
+
+	// parse query
+	var mQueryValues map[string][]string = r.URL.Query()
+
+	var hash string = ""
+	if len(mQueryValues["hash"]) != 0 {
+		hash = mQueryValues["hash"][0]
+	}
+
+	var blocks []BlockMessage = SQLSelectHashBlocks(hash)
+
+	var blocks_json []byte
+	blocks_json, err = json.Marshal(blocks)
+	if err != nil {
+		fmt.Fprintf(w, "ERROR: invalid blocks")
+		return
+	}
+
+	fmt.Fprintf(w, string(blocks_json))
+}
+
+// Inv
+func HandleGetRecentInv(w http.ResponseWriter, r *http.Request) {
+	var err error
+
+	// parse query
+	var mQueryValues map[string][]string = r.URL.Query()
+
+	var n int = 5
+	if len(mQueryValues["n"]) != 0 {
+		n, err = strconv.Atoi(mQueryValues["n"][0])
+		if err != nil {
+			fmt.Fprintf(w, "ERROR: invalid argument")
+			return
+		}
+	}
+
+	var inv []InvMessage = SQLSelectRecentInv(n)
+
+	var inv_json []byte
+	inv_json, err = json.Marshal(inv)
+	if err != nil {
+		fmt.Fprintf(w, "ERROR: invalid blocks")
+		return
+	}
+
+	fmt.Fprintf(w, string(inv_json))
+}
+
+func HandleGetHashInv(w http.ResponseWriter, r *http.Request) {
+	var err error
+
+	// parse query
+	var mQueryValues map[string][]string = r.URL.Query()
+
+	var hash string = ""
+	if len(mQueryValues["hash"]) != 0 {
+		hash = mQueryValues["hash"][0]
+	}
+
+	var inv []InvMessage = SQLSelectHashInv(hash)
+
+	var inv_json []byte
+	inv_json, err = json.Marshal(inv)
+	if err != nil {
+		fmt.Fprintf(w, "ERROR: invalid blocks")
+		return
+	}
+
+	fmt.Fprintf(w, string(inv_json))
 }
 
 // Forks
@@ -138,13 +211,31 @@ func HandleGetRangeForks(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(forks_json))
 }
 
-func StartJSONService() {
+func StartJSONServer() {
+
+	JSONServer = http.Server{Addr: ":8080"}
 
 	http.HandleFunc("/recentblocks", HandleGetRecentBlocks)
 	http.HandleFunc("/rangeblocks", HandleGetRangeBlocks)
+	http.HandleFunc("/hashblocks", HandleGetHashBlocks)
+
+	http.HandleFunc("/recentinv", HandleGetRecentInv)
+	http.HandleFunc("/hashinv", HandleGetHashInv)
 
 	http.HandleFunc("/recentforks", HandleGetRecentForks)
 	http.HandleFunc("/rangeforks", HandleGetRangeForks)
 
-	http.ListenAndServe(":8080", nil)
+	go func() {
+		if err := JSONServer.ListenAndServe(); err != nil {
+			fmt.Printf("JSON server Shutdown: %s\n", err.Error())
+		}
+	}()
+}
+
+func StopJSONServer() {
+
+	if err := JSONServer.Shutdown(context.Background()); err != nil {
+		// Error from closing listeners, or context timeout:
+		fmt.Printf("HTTP server Shutdown: %s\n", err.Error())
+	}
 }

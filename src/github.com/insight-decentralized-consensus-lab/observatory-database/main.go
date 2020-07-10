@@ -57,10 +57,14 @@ func main() {
 	}
 
 	// Start JSON Server
-	StartJSONService()
+	StartJSONServer()
 
 	for {
 		if GetShutdownStatus() {
+
+			// Stop JSON server
+			StopJSONServer()
+
 			var countdown int = 3
 
 			log.Printf("Shutting Down in %d seconds...", countdown)
