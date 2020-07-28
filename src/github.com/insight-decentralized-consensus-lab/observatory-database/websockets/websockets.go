@@ -1,6 +1,10 @@
-package main
+package websockets
 
 import (
+	"zcash-obs-db/shutdown"
+	"zcash-obs-db/sql"
+	"zcash-obs-db/util"
+
 	"bytes"
 	"encoding/json"
 	"golang.org/x/net/websocket"
@@ -18,9 +22,9 @@ func clearBuffer(buf []byte, n int) {
 
 // Helper
 // Hangs until connection established
-func connectWebsocket(session OBSSession) (*websocket.Conn, int64) {
-	url := session.url
-	origin := session.origin
+func connectWebsocket(session util.OBSSession) (*websocket.Conn, int64) {
+	url := session.Url
+	origin := session.Origin
 
 	nConnectionAttempt := 0
 
@@ -37,7 +41,7 @@ func connectWebsocket(session OBSSession) (*websocket.Conn, int64) {
 			log.Printf("Websocket open with %s", origin)
 
 			// SQL entry
-			session_id := SQLInsertSession(session)
+			session_id := sql.SQLInsertSession(session)
 
 			return ws, session_id
 		}
@@ -48,7 +52,7 @@ func connectWebsocket(session OBSSession) (*websocket.Conn, int64) {
 }
 
 // Run as Go Routine
-func HandleWebsocket(session OBSSession) {
+func HandleWebsocket(session util.OBSSession) {
 
 	// initial connection
 	ws, session_id := connectWebsocket(session)
@@ -60,15 +64,15 @@ func HandleWebsocket(session OBSSession) {
 	var unfinishedBrackets = 0         // track "{...}"
 	for {
 		// Check for Shutdown
-		if GetShutdownStatus() {
-			SQLUpdateDisconnectSession(session_id)
+		if shutdown.GetShutdownStatus() {
+			sql.SQLUpdateDisconnectSession(session_id)
 
 			break
 		}
 
 		nBytesRead, err := ws.Read(wsBuffer)
 		if err != nil {
-			SQLUpdateDisconnectSession(session_id)
+			sql.SQLUpdateDisconnectSession(session_id)
 
 			// reconnect
 			ws, session_id = connectWebsocket(session)
@@ -94,7 +98,7 @@ func HandleWebsocket(session OBSSession) {
 			json_i += 1
 
 			if unfinishedBrackets == 0 {
-				log.Printf("%s BUFFER: %s\n", session.name, string(JSONBuffer))
+				log.Printf("%s BUFFER: %s\n", session.Name, string(JSONBuffer))
 
 				var result map[string]interface{}
 				err = json.Unmarshal(bytes.Trim(JSONBuffer, "\x00"), &result)
@@ -107,7 +111,7 @@ func HandleWebsocket(session OBSSession) {
 				}
 
 				if result["type"] == "block" {
-					msg := BlockMessage{
+					msg := util.BlockMessage{
 						uint(result["data"].(map[string]interface{})["height"].(float64)),
 						result["data"].(map[string]interface{})["hash"].(string),
 						result["data"].(map[string]interface{})["prev_hash"].(string),
@@ -117,20 +121,21 @@ func HandleWebsocket(session OBSSession) {
 						uint(result["data"].(map[string]interface{})["block_size"].(float64)),
 						uint64(result["data"].(map[string]interface{})["miner_time"].(float64) * 1000),
 						uint64(result["data"].(map[string]interface{})["network_time"].(float64) * 1000),
+						make([]util.InvMessage, 0),
 					}
 
-					SQLInsertBlock(msg)
+					sql.SQLInsertBlock(msg)
 				} else if result["type"] == "inv" {
-					msg := InvMessage{
+					msg := util.InvMessage{
 						result["data"].(map[string]interface{})["hash"].(string),
 						result["data"].(map[string]interface{})["peer_ip"].(string),
 						uint64(result["data"].(map[string]interface{})["network_time"].(float64) * 1000),
 						session_id,
 					}
 
-					SQLInsertInv(msg)
+					sql.SQLInsertInv(msg)
 				} else if result["type"] == "peer_conn" {
-					msg := PeerConnMessage{
+					msg := util.PeerConnMessage{
 						result["data"].(map[string]interface{})["peer_ip"].(string),
 						uint(result["data"].(map[string]interface{})["version"].(float64)),
 						result["data"].(map[string]interface{})["subversion"].(string),
@@ -141,15 +146,15 @@ func HandleWebsocket(session OBSSession) {
 						session_id,
 					}
 
-					SQLInsertPeerConn(msg)
+					sql.SQLInsertPeerConn(msg)
 				} else if result["type"] == "peer_dis" {
-					msg := PeerDisMessage{
+					msg := util.PeerDisMessage{
 						result["data"].(map[string]interface{})["peer_ip"].(string),
 						uint64(result["data"].(map[string]interface{})["network_time"].(float64) * 1000),
 						session_id,
 					}
 
-					SQLInsertPeerDis(msg)
+					sql.SQLInsertPeerDis(msg)
 				}
 
 				clearBuffer(JSONBuffer, 512)

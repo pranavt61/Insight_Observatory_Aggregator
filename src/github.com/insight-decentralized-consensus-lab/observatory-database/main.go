@@ -1,6 +1,12 @@
 package main
 
 import (
+	"zcash-obs-db/rest"
+	"zcash-obs-db/shutdown"
+	"zcash-obs-db/sql"
+	"zcash-obs-db/util"
+	"zcash-obs-db/websockets"
+
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -8,12 +14,6 @@ import (
 	"os/signal"
 	"time"
 )
-
-type OBSSession struct {
-	name   string
-	url    string
-	origin string
-}
 
 func main() {
 
@@ -25,12 +25,12 @@ func main() {
 			// sig is a ^C, handle it
 			log.Printf("KILL")
 
-			RequestShutdown()
+			shutdown.RequestShutdown()
 		}
 	}()
 
 	// Open Database Connection
-	OpenDBConnection()
+	sql.OpenDBConnection()
 	log.Printf("DB connection open")
 
 	// Read obs.json
@@ -47,23 +47,23 @@ func main() {
 	}
 
 	// Start Websocket connections
-	vSessions := make([]OBSSession, len(vJSON))
+	vSessions := make([]util.OBSSession, len(vJSON))
 	for i := 0; i < len(vJSON); i++ {
-		vSessions[i].name = vJSON[i]["name"]
-		vSessions[i].url = vJSON[i]["url"]
-		vSessions[i].origin = vJSON[i]["origin"]
+		vSessions[i].Name = vJSON[i]["name"]
+		vSessions[i].Url = vJSON[i]["url"]
+		vSessions[i].Origin = vJSON[i]["origin"]
 
-		go HandleWebsocket(vSessions[i])
+		go websockets.HandleWebsocket(vSessions[i])
 	}
 
 	// Start JSON Server
-	StartJSONServer()
+	go rest.StartJSONServer()
 
 	for {
-		if GetShutdownStatus() {
+		if shutdown.GetShutdownStatus() {
 
 			// Stop JSON server
-			StopJSONServer()
+			rest.StopJSONServer()
 
 			var countdown int = 3
 

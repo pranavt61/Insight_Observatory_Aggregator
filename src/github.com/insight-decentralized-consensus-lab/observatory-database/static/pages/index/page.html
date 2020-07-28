@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+    <head>
+
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+        <!-- Bootstrap 4 CSS -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+
+        <!-- jQuery -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+        <!-- jQuery timeago -->
+        <script src="https://timeago.yarp.com/jquery.timeago.js"></script>
+
+        <!-- Popper JS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+
+        <!-- Bootstrap 4 JS -->
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script>
+
+        <!-- Chart JS -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.3/dist/Chart.min.js"></script>
+
+        <script src="static/pages/index/script.js"></script>
+
+        <title>ZCash Fork Explorer</title>
+    </head>
+    <body>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container">
+                <a class="navbar-brand" href="/">
+                    <h1 class="display-2">ZForks</h1>
+                </a>
+            </div>
+        </nav>
+
+        <div class="container pt-3">
+            <div class="row">
+              <div class="col">
+                <h1 class="display-4">
+                    Recent Blocks
+                </h1>
+                <table class="table table-striped">
+                  <thead>
+                      <tr>
+                        <th scope="col">Height</th>
+                        <th scope="col">Received at</th>
+                        <th scope="col">Propigation</th>
+                    </tr>
+                  </thead>
+                  <tbody id="RecentBlocksTable">
+                  </tbody>
+                </table>
+              </div>
+              <div class="col">
+                <h1 class="display-4">
+                    Recent Forks
+                </h1>
+                <table class="table table-striped">
+                  <thead>
+                      <tr>
+                        <th scope="col">Height</th>
+                        <th scope="col">Received at</th>
+                    </tr>
+                  </thead>
+                  <tbody id="RecentForksTable">
+                  </tbody>
+                </table>
+
+              </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <canvas id="myChart" width="400" height="400"></canvas>
+                </div>
+                <div class="col">
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

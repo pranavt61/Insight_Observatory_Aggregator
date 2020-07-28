@@ -1,4 +1,4 @@
-package main
+package sql
 
 import (
 	"database/sql"
@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 	"time"
+	"zcash-obs-db/util"
 )
 
 var DBConnection *sql.DB
@@ -27,7 +28,7 @@ func CloseDBConnection() {
 }
 
 //-- Websocket Entries --//
-func SQLInsertSession(session OBSSession) int64 {
+func SQLInsertSession(session util.OBSSession) int64 {
 	// SQL entry
 	DBMutex.Lock()
 	stmt, err := DBConnection.Prepare(
@@ -44,8 +45,8 @@ func SQLInsertSession(session OBSSession) int64 {
 	}
 
 	sql_res, err := stmt.Exec(
-		session.url,
-		session.name,
+		session.Url,
+		session.Name,
 		time.Now().UnixNano()/int64(time.Millisecond),
 	)
 	if err != nil {
@@ -85,7 +86,7 @@ func SQLUpdateDisconnectSession(session_id int64) {
 
 //--- Network INSERT Commands --//
 
-func SQLInsertBlock(block BlockMessage) {
+func SQLInsertBlock(block util.BlockMessage) {
 
 	DBMutex.Lock()
 	stmt, err := DBConnection.Prepare(
@@ -129,7 +130,7 @@ func SQLInsertBlock(block BlockMessage) {
 	return
 }
 
-func SQLInsertInv(inv InvMessage) {
+func SQLInsertInv(inv util.InvMessage) {
 
 	DBMutex.Lock()
 	stmt, err := DBConnection.Prepare(
@@ -161,7 +162,7 @@ func SQLInsertInv(inv InvMessage) {
 	return
 }
 
-func SQLInsertPeerConn(peer PeerConnMessage) {
+func SQLInsertPeerConn(peer util.PeerConnMessage) {
 
 	DBMutex.Lock()
 	stmt, err := DBConnection.Prepare(
@@ -184,14 +185,14 @@ func SQLInsertPeerConn(peer PeerConnMessage) {
 	}
 
 	_, err = stmt.Exec(
-		peer.peer_ip,
-		peer.version,
-		peer.subversion,
-		peer.start_height,
-		peer.services,
-		peer.peer_time,
-		peer.network_time,
-		peer.session_id,
+		peer.Peer_ip,
+		peer.Version,
+		peer.Subversion,
+		peer.Start_height,
+		peer.Services,
+		peer.Peer_time,
+		peer.Network_time,
+		peer.Session_id,
 	)
 	if err != nil {
 		log.Printf("SQL Statement Exec Error: %s\n", err.Error())
@@ -202,7 +203,7 @@ func SQLInsertPeerConn(peer PeerConnMessage) {
 	return
 }
 
-func SQLInsertPeerDis(peer PeerDisMessage) {
+func SQLInsertPeerDis(peer util.PeerDisMessage) {
 
 	DBMutex.Lock()
 	stmt, err := DBConnection.Prepare(
@@ -215,9 +216,9 @@ func SQLInsertPeerDis(peer PeerDisMessage) {
 	}
 
 	_, err = stmt.Exec(
-		peer.network_time,
-		peer.session_id,
-		peer.peer_ip,
+		peer.Network_time,
+		peer.Session_id,
+		peer.Peer_ip,
 	)
 	if err != nil {
 		log.Printf("SQL Statement Exec Error: %s\n", err.Error())
@@ -230,7 +231,107 @@ func SQLInsertPeerDis(peer PeerDisMessage) {
 
 //--- JSON Server SELECT Commands --//
 
-func SQLSelectRecentBlocks(n int) []BlockMessage {
+func SQLSelectRecentBlocks(n int) []util.BlockMessage {
+	DBMutex.Lock()
+	ret, err := DBConnection.Query(
+		`SELECT
+			*
+		FROM (
+			SELECT *
+			FROM blocks
+			ORDER BY blocks.height DESC
+			LIMIT ?
+		) AS recent_blocks
+		LEFT JOIN inv ON recent_blocks.hash = inv.hash;`,
+		n,
+	)
+	DBMutex.Unlock()
+	if err != nil {
+		log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+		return nil
+	}
+
+	blocks := make([]util.BlockMessage, 0)
+	block_buffer := struct {
+		Blocks_height       uint
+		Blocks_hash         string
+		Blocks_prev_hash    string
+		Blocks_coinbase_tx  string
+		Blocks_num_tx       uint
+		Blocks_difficulty   float64
+		Blocks_block_size   uint
+		Blocks_miner_time   uint64
+		Blocks_network_time uint64
+		Inv_hash            string
+		Inv_peer_ip         string
+		Inv_network_time    uint64
+		Inv_session_id      int64
+	}{}
+	seen_blocks := make(map[string]int)
+	i := 0
+	for ret.Next() {
+
+		// Parse SQL
+		ret.Scan(
+			&(block_buffer.Blocks_height),
+			&(block_buffer.Blocks_hash),
+			&(block_buffer.Blocks_prev_hash),
+			&(block_buffer.Blocks_coinbase_tx),
+			&(block_buffer.Blocks_num_tx),
+			&(block_buffer.Blocks_difficulty),
+			&(block_buffer.Blocks_block_size),
+			&(block_buffer.Blocks_miner_time),
+			&(block_buffer.Blocks_network_time),
+			&(block_buffer.Inv_hash),
+			&(block_buffer.Inv_peer_ip),
+			&(block_buffer.Inv_network_time),
+			&(block_buffer.Inv_session_id),
+		)
+
+		if index, ok := seen_blocks[block_buffer.Blocks_hash]; ok {
+			// block seen
+			inv := util.InvMessage{
+				block_buffer.Inv_hash,
+				block_buffer.Inv_peer_ip,
+				block_buffer.Inv_network_time,
+				block_buffer.Inv_session_id,
+			}
+
+			blocks[index].Inv = append(blocks[index].Inv, inv)
+		} else {
+			block := util.BlockMessage{
+				block_buffer.Blocks_height,
+				block_buffer.Blocks_hash,
+				block_buffer.Blocks_prev_hash,
+				block_buffer.Blocks_coinbase_tx,
+				block_buffer.Blocks_num_tx,
+				block_buffer.Blocks_difficulty,
+				block_buffer.Blocks_block_size,
+				block_buffer.Blocks_miner_time,
+				block_buffer.Blocks_network_time,
+				make([]util.InvMessage, 0),
+			}
+
+			inv := util.InvMessage{
+				block_buffer.Inv_hash,
+				block_buffer.Inv_peer_ip,
+				block_buffer.Inv_network_time,
+				block_buffer.Inv_session_id,
+			}
+			block.Inv = append(block.Inv, inv)
+
+			blocks = append(blocks, block)
+
+			seen_blocks[block.Hash] = i
+			i++
+		}
+
+	}
+
+	return blocks
+}
+
+func SQLSelectRecentBlocksTable(n int) []util.BlockMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
 		`SELECT * from blocks
@@ -244,10 +345,10 @@ func SQLSelectRecentBlocks(n int) []BlockMessage {
 		return nil
 	}
 
-	var blocks []BlockMessage = make([]BlockMessage, 0)
+	var blocks []util.BlockMessage = make([]util.BlockMessage, 0)
 	var i int = 0
 	for ret.Next() {
-		blocks = append(blocks, BlockMessage{})
+		blocks = append(blocks, util.BlockMessage{})
 
 		ret.Scan(
 			&blocks[i].Height,
@@ -261,13 +362,39 @@ func SQLSelectRecentBlocks(n int) []BlockMessage {
 			&blocks[i].Network_time,
 		)
 
+		DBMutex.Lock()
+		inv_ret, err := DBConnection.Query(
+			`SELECT * from inv
+			WHERE hash=?;`,
+			blocks[i].Hash,
+		)
+		DBMutex.Unlock()
+		if err != nil {
+			log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+			return nil
+		}
+
+		j := 0
+		for inv_ret.Next() {
+			blocks[i].Inv = append(blocks[i].Inv, util.InvMessage{})
+
+			inv_ret.Scan(
+				&blocks[i].Inv[j].Hash,
+				&blocks[i].Inv[j].Peer_ip,
+				&blocks[i].Inv[j].Network_time,
+				&blocks[i].Inv[j].Session_id,
+			)
+
+			j++
+		}
+
 		i++
 	}
 
 	return blocks
 }
 
-func SQLSelectRangeBlocks(min int, max int) []BlockMessage {
+func SQLSelectRangeBlocks(min int, max int) []util.BlockMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
 		`SELECT * from blocks
@@ -283,10 +410,10 @@ func SQLSelectRangeBlocks(min int, max int) []BlockMessage {
 		return nil
 	}
 
-	var blocks []BlockMessage = make([]BlockMessage, 0)
+	var blocks []util.BlockMessage = make([]util.BlockMessage, 0)
 	var i int = 0
 	for ret.Next() {
-		blocks = append(blocks, BlockMessage{})
+		blocks = append(blocks, util.BlockMessage{})
 
 		ret.Scan(
 			&blocks[i].Height,
@@ -306,7 +433,7 @@ func SQLSelectRangeBlocks(min int, max int) []BlockMessage {
 	return blocks
 }
 
-func SQLSelectHashBlocks(hash string) []BlockMessage {
+func SQLSelectHashBlocks(hash string) []util.BlockMessage {
 
 	// count Rows
 	DBMutex.Lock()
@@ -323,10 +450,10 @@ func SQLSelectHashBlocks(hash string) []BlockMessage {
 		return nil
 	}
 
-	var blocks []BlockMessage = make([]BlockMessage, 0)
+	var blocks []util.BlockMessage = make([]util.BlockMessage, 0)
 	var i int = 0
 	for ret.Next() {
-		blocks = append(blocks, BlockMessage{})
+		blocks = append(blocks, util.BlockMessage{})
 
 		ret.Scan(
 			&blocks[i].Height,
@@ -346,7 +473,7 @@ func SQLSelectHashBlocks(hash string) []BlockMessage {
 	return blocks
 }
 
-func SQLSelectRecentInv(n int) []InvMessage {
+func SQLSelectRecentInv(n int) []util.InvMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
 		`SELECT * from inv
@@ -360,10 +487,10 @@ func SQLSelectRecentInv(n int) []InvMessage {
 		return nil
 	}
 
-	var inv []InvMessage = make([]InvMessage, 0)
+	var inv []util.InvMessage = make([]util.InvMessage, 0)
 	var i int = 0
 	for ret.Next() {
-		inv = append(inv, InvMessage{})
+		inv = append(inv, util.InvMessage{})
 
 		ret.Scan(
 			&inv[i].Hash,
@@ -378,7 +505,7 @@ func SQLSelectRecentInv(n int) []InvMessage {
 	return inv
 }
 
-func SQLSelectHashInv(hash string) []InvMessage {
+func SQLSelectHashInv(hash string) []util.InvMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
 		`SELECT * from inv
@@ -391,10 +518,10 @@ func SQLSelectHashInv(hash string) []InvMessage {
 		return nil
 	}
 
-	var inv []InvMessage = make([]InvMessage, 0)
+	var inv []util.InvMessage = make([]util.InvMessage, 0)
 	var i int = 0
 	for ret.Next() {
-		inv = append(inv, InvMessage{})
+		inv = append(inv, util.InvMessage{})
 
 		ret.Scan(
 			&inv[i].Hash,
@@ -409,7 +536,7 @@ func SQLSelectHashInv(hash string) []InvMessage {
 	return inv
 }
 
-func SQLSelectRecentForks(n int) []ForkMessage {
+func SQLSelectRecentForks(n int) []util.ForkMessage {
 	DBMutex.Lock()
 	forks_ret, err := DBConnection.Query(
 		`SELECT
@@ -418,6 +545,7 @@ func SQLSelectRecentForks(n int) []ForkMessage {
 		FROM blocks
 		GROUP BY height
 		HAVING n > 1
+		ORDER BY blocks.height DESC
 		LIMIT ?;`,
 		n,
 	)
@@ -427,10 +555,10 @@ func SQLSelectRecentForks(n int) []ForkMessage {
 		return nil
 	}
 
-	var forks []ForkMessage = make([]ForkMessage, 0)
+	var forks []util.ForkMessage = make([]util.ForkMessage, 0)
 	var i int = 0
 	for forks_ret.Next() {
-		forks = append(forks, ForkMessage{})
+		forks = append(forks, util.ForkMessage{})
 
 		forks_ret.Scan(
 			&forks[i].Height,
@@ -438,7 +566,7 @@ func SQLSelectRecentForks(n int) []ForkMessage {
 		)
 
 		// Query Block data
-		forks[i].Blocks = make([]BlockMessage, forks[i].Num_blocks)
+		forks[i].Blocks = make([]util.BlockMessage, forks[i].Num_blocks)
 
 		DBMutex.Lock()
 		block_ret, err := DBConnection.Query(
@@ -477,7 +605,73 @@ func SQLSelectRecentForks(n int) []ForkMessage {
 	return forks
 }
 
-func SQLSelectRangeForks(min int, max int) []ForkMessage {
+func SQLSelectRecentForksChart(min_time uint64, max_time uint64) []util.ForkMessage {
+	DBMutex.Lock()
+	forks_ret, err := DBConnection.Query(
+		`SELECT
+			height,
+			COUNT(height) n
+		FROM blocks
+		GROUP BY height
+		HAVING n > 1;`,
+	)
+	DBMutex.Unlock()
+	if err != nil {
+		log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+		return nil
+	}
+
+	var forks []util.ForkMessage = make([]util.ForkMessage, 0)
+	var i int = 0
+	for forks_ret.Next() {
+		forks = append(forks, util.ForkMessage{})
+
+		forks_ret.Scan(
+			&forks[i].Height,
+			&forks[i].Num_blocks,
+		)
+
+		// Query Block data
+		forks[i].Blocks = make([]util.BlockMessage, forks[i].Num_blocks)
+
+		DBMutex.Lock()
+		block_ret, err := DBConnection.Query(
+			`SELECT
+				*
+			FROM blocks 
+			WHERE height = ?;`,
+			forks[i].Height,
+		)
+		DBMutex.Unlock()
+		if err != nil {
+			log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+			return nil
+		}
+
+		var j int = 0
+		for block_ret.Next() {
+			block_ret.Scan(
+				&forks[i].Blocks[j].Height,
+				&forks[i].Blocks[j].Hash,
+				&forks[i].Blocks[j].Prev_hash,
+				&forks[i].Blocks[j].Coinbase_tx,
+				&forks[i].Blocks[j].Num_tx,
+				&forks[i].Blocks[j].Difficulty,
+				&forks[i].Blocks[j].Block_size,
+				&forks[i].Blocks[j].Miner_time,
+				&forks[i].Blocks[j].Network_time,
+			)
+
+			j++
+		}
+
+		i++
+	}
+
+	return forks
+}
+
+func SQLSelectRangeForks(min int, max int) []util.ForkMessage {
 
 	// count Rows
 	DBMutex.Lock()
@@ -496,10 +690,10 @@ func SQLSelectRangeForks(min int, max int) []ForkMessage {
 		return nil
 	}
 
-	var forks []ForkMessage = make([]ForkMessage, 0)
+	var forks []util.ForkMessage = make([]util.ForkMessage, 0)
 	var i int = 0
 	for ret.Next() {
-		forks = append(forks, ForkMessage{})
+		forks = append(forks, util.ForkMessage{})
 
 		ret.Scan(
 			&forks[i].Height,
