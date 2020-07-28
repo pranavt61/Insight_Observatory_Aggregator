@@ -9,10 +9,10 @@ import (
 	"zcash-obs-db/util"
 )
 
-func HandleRecentBlocks(w http.ResponseWriter, r *http.Request) {
-	var blocks []util.BlockMessage = sql.SQLSelectRecentBlocks(5)
+func HandleRecentForks(w http.ResponseWriter, r *http.Request) {
+	var forks []util.ForkMessage = sql.SQLSelectRecentForks(5)
 
-	raw_json, err := json.Marshal(blocks)
+	raw_json, err := json.Marshal(forks)
 	if err != nil {
 		fmt.Fprintf(w, "500")
 		return

@@ -230,7 +230,6 @@ func SQLInsertPeerDis(peer util.PeerDisMessage) {
 }
 
 //--- JSON Server SELECT Commands --//
-
 func SQLSelectRecentBlocks(n int) []util.BlockMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
@@ -311,6 +310,7 @@ func SQLSelectRecentBlocks(n int) []util.BlockMessage {
 				block_buffer.Blocks_network_time,
 				make([]util.InvMessage, 0),
 			}
+			blocks = append(blocks, block)
 
 			inv := util.InvMessage{
 				block_buffer.Inv_hash,
@@ -318,9 +318,7 @@ func SQLSelectRecentBlocks(n int) []util.BlockMessage {
 				block_buffer.Inv_network_time,
 				block_buffer.Inv_session_id,
 			}
-			block.Inv = append(block.Inv, inv)
-
-			blocks = append(blocks, block)
+			blocks[i].Inv = append(blocks[i].Inv, inv)
 
 			seen_blocks[block.Hash] = i
 			i++
@@ -538,15 +536,20 @@ func SQLSelectHashInv(hash string) []util.InvMessage {
 
 func SQLSelectRecentForks(n int) []util.ForkMessage {
 	DBMutex.Lock()
-	forks_ret, err := DBConnection.Query(
+	ret, err := DBConnection.Query(
 		`SELECT
-			height,
-			COUNT(height) n
-		FROM blocks
-		GROUP BY height
-		HAVING n > 1
-		ORDER BY blocks.height DESC
-		LIMIT ?;`,
+			*
+		FROM blocks as b1
+		INNER JOIN (
+			SELECT
+				height,
+				COUNT(height) n
+			FROM blocks
+			GROUP BY height
+			HAVING n > 1
+			ORDER BY blocks.height DESC
+			LIMIT ?) as b2
+		ON b1.height = b2.height;`,
 		n,
 	)
 	DBMutex.Unlock()
@@ -555,51 +558,85 @@ func SQLSelectRecentForks(n int) []util.ForkMessage {
 		return nil
 	}
 
-	var forks []util.ForkMessage = make([]util.ForkMessage, 0)
-	var i int = 0
-	for forks_ret.Next() {
-		forks = append(forks, util.ForkMessage{})
+	forks := make([]util.ForkMessage, 0)
+	fork_buffer := struct {
+		Block_height       uint
+		Block_hash         string
+		Block_prev_hash    string
+		Block_coinbase_tx  string
+		Block_num_tx       uint
+		Block_difficulty   float64
+		Block_size         uint
+		Block_miner_time   uint64
+		Block_network_time uint64
+		Fork_height        uint
+		Fork_size          int
+	}{}
+	seen_forks := make(map[uint]int)
+	i := 0
+	for ret.Next() {
 
-		forks_ret.Scan(
-			&forks[i].Height,
-			&forks[i].Num_blocks,
+		ret.Scan(
+			&(fork_buffer.Block_height),
+			&(fork_buffer.Block_hash),
+			&(fork_buffer.Block_prev_hash),
+			&(fork_buffer.Block_coinbase_tx),
+			&(fork_buffer.Block_num_tx),
+			&(fork_buffer.Block_difficulty),
+			&(fork_buffer.Block_size),
+			&(fork_buffer.Block_miner_time),
+			&(fork_buffer.Block_network_time),
+			&(fork_buffer.Fork_height),
+			&(fork_buffer.Fork_size),
 		)
 
-		// Query Block data
-		forks[i].Blocks = make([]util.BlockMessage, forks[i].Num_blocks)
+		log.Println(fork_buffer)
 
-		DBMutex.Lock()
-		block_ret, err := DBConnection.Query(
-			`SELECT
-				*
-			FROM blocks 
-			WHERE height = ?;`,
-			forks[i].Height,
-		)
-		DBMutex.Unlock()
-		if err != nil {
-			log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
-			return nil
+		if index, ok := seen_forks[fork_buffer.Block_height]; ok {
+			// fork seen
+			block := util.BlockMessage{
+				fork_buffer.Block_height,
+				fork_buffer.Block_hash,
+				fork_buffer.Block_prev_hash,
+				fork_buffer.Block_coinbase_tx,
+				fork_buffer.Block_num_tx,
+				fork_buffer.Block_difficulty,
+				fork_buffer.Block_size,
+				fork_buffer.Block_miner_time,
+				fork_buffer.Block_network_time,
+				make([]util.InvMessage, 0),
+			}
+
+			forks[index].Blocks = append(forks[index].Blocks, block)
+			forks[index].Num_blocks++
+		} else {
+			// new fork
+			fork := util.ForkMessage{
+				fork_buffer.Block_height,
+				1,
+				make([]util.BlockMessage, 0),
+			}
+			forks = append(forks, fork)
+
+			block := util.BlockMessage{
+				fork_buffer.Block_height,
+				fork_buffer.Block_hash,
+				fork_buffer.Block_prev_hash,
+				fork_buffer.Block_coinbase_tx,
+				fork_buffer.Block_num_tx,
+				fork_buffer.Block_difficulty,
+				fork_buffer.Block_size,
+				fork_buffer.Block_miner_time,
+				fork_buffer.Block_network_time,
+				make([]util.InvMessage, 0),
+			}
+
+			forks[i].Blocks = append(forks[i].Blocks, block)
+
+			seen_forks[fork.Height] = i
+
+			i++
 		}
-
-		var j int = 0
-		for block_ret.Next() {
-			block_ret.Scan(
-				&forks[i].Blocks[j].Height,
-				&forks[i].Blocks[j].Hash,
-				&forks[i].Blocks[j].Prev_hash,
-				&forks[i].Blocks[j].Coinbase_tx,
-				&forks[i].Blocks[j].Num_tx,
-				&forks[i].Blocks[j].Difficulty,
-				&forks[i].Blocks[j].Block_size,
-				&forks[i].Blocks[j].Miner_time,
-				&forks[i].Blocks[j].Network_time,
-			)
-
-			j++
-		}
-
-		i++
 	}
 
 	return forks
