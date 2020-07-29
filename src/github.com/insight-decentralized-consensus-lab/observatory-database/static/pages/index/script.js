@@ -1,7 +1,7 @@
 let updateTables = () => {
 
     // Recent Blocks Table
-    $.get("/recentblocks?n=5&with_inv=true", function(data, status) {
+    $.get("/v1/json/recentblocks?n=5&with_inv=true", function(data, status) {
         let blocks = JSON.parse(data).reverse();
 
         $("#RecentBlocksTable").empty();
@@ -39,7 +39,7 @@ let updateTables = () => {
     });
 
     // Recent Forks Table
-    $.get("/recentforks", function(data, status) {
+    $.get("/v1/json/recentforks", function(data, status) {
         let forks = JSON.parse(data).reverse();
 
         $("#RecentForksTable").empty();
@@ -58,7 +58,7 @@ let updateTables = () => {
 
     // Block Size Chart
     let ctx = document.getElementById('myChart').getContext('2d');
-    $.get("recentblocks?n=100&with_inv=false", function(data, status){
+    $.get("/v1/json/recentblocks?n=100&with_inv=false", function(data, status){
         let blocks = JSON.parse(data);
 
         let sizes = [];
@@ -66,8 +66,8 @@ let updateTables = () => {
             sizes.push(blocks[i].block_size);
         }
 
-        let num_bars = 6;
-        let bars = [0,0,0,0,0,0];
+        let num_bars = 10;
+        let bars = [0,0,0,0,0,0,0,0,0,0];
         let max_size = Math.max(...sizes);
         for (let i = 0; i < sizes.length; i ++) {
             bars[Math.min(Math.floor(bars.length * sizes[i]/max_size), num_bars - 1)] ++;
@@ -76,7 +76,7 @@ let updateTables = () => {
         let config = {
             type: 'bar',
             data: {
-                labels: ['', '', '', '', '', ''],
+                labels: ['', '', '', '', '', '', '', '', '', ''],
                 datasets: [{
                     label: 'Block Sizes of Last 100',
                     data: bars,
@@ -86,11 +86,20 @@ let updateTables = () => {
                         'rgba(255, 206, 86, 0.2)',
                         'rgba(75, 192, 192, 0.2)',
                         'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
                         'rgba(255, 159, 64, 0.2)'
+
                     ],
                     borderColor: [
                         'rgba(255, 99, 132, 1)',
                         'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)',
                         'rgba(255, 206, 86, 1)',
                         'rgba(75, 192, 192, 1)',
                         'rgba(153, 102, 255, 1)',
