@@ -233,6 +233,66 @@ func SQLInsertPeerDis(peer util.PeerDisMessage) {
 func SQLSelectRecentBlocks(n int) []util.BlockMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
+		`SELECT *
+		FROM blocks
+		ORDER BY blocks.height DESC
+		LIMIT ?;`,
+		n,
+	)
+	DBMutex.Unlock()
+	if err != nil {
+		log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+		return nil
+	}
+
+	blocks := make([]util.BlockMessage, 0)
+	block_buffer := struct {
+		Blocks_height       uint
+		Blocks_hash         string
+		Blocks_prev_hash    string
+		Blocks_coinbase_tx  string
+		Blocks_num_tx       uint
+		Blocks_difficulty   float64
+		Blocks_block_size   uint
+		Blocks_miner_time   uint64
+		Blocks_network_time uint64
+	}{}
+	for ret.Next() {
+
+		// Parse SQL
+		ret.Scan(
+			&(block_buffer.Blocks_height),
+			&(block_buffer.Blocks_hash),
+			&(block_buffer.Blocks_prev_hash),
+			&(block_buffer.Blocks_coinbase_tx),
+			&(block_buffer.Blocks_num_tx),
+			&(block_buffer.Blocks_difficulty),
+			&(block_buffer.Blocks_block_size),
+			&(block_buffer.Blocks_miner_time),
+			&(block_buffer.Blocks_network_time),
+		)
+
+		block := util.BlockMessage{
+			block_buffer.Blocks_height,
+			block_buffer.Blocks_hash,
+			block_buffer.Blocks_prev_hash,
+			block_buffer.Blocks_coinbase_tx,
+			block_buffer.Blocks_num_tx,
+			block_buffer.Blocks_difficulty,
+			block_buffer.Blocks_block_size,
+			block_buffer.Blocks_miner_time,
+			block_buffer.Blocks_network_time,
+			make([]util.InvMessage, 0),
+		}
+
+		blocks = append(blocks, block)
+	}
+
+	return blocks
+}
+func SQLSelectRecentBlocksWithInv(n int) []util.BlockMessage {
+	DBMutex.Lock()
+	ret, err := DBConnection.Query(
 		`SELECT
 			*
 		FROM (

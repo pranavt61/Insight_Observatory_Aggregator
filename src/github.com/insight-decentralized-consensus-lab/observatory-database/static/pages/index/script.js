@@ -1,9 +1,8 @@
 let updateTables = () => {
 
     // Recent Blocks Table
-    $.get("/recentblocks", function(data, status) {
-        console.log(data);
-        let blocks = JSON.parse(data);
+    $.get("/recentblocks?n=5&with_inv=true", function(data, status) {
+        let blocks = JSON.parse(data).reverse();
 
         $("#RecentBlocksTable").empty();
 
@@ -41,7 +40,7 @@ let updateTables = () => {
 
     // Recent Forks Table
     $.get("/recentforks", function(data, status) {
-        let forks = JSON.parse(data);
+        let forks = JSON.parse(data).reverse();
 
         $("#RecentForksTable").empty();
 
@@ -59,7 +58,7 @@ let updateTables = () => {
 
     // Block Size Chart
     let ctx = document.getElementById('myChart').getContext('2d');
-    $.get("recentblocks?n=100", function(data, status){
+    $.get("recentblocks?n=100&with_inv=false", function(data, status){
         let blocks = JSON.parse(data);
 
         let sizes = [];
