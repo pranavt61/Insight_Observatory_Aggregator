@@ -6,6 +6,32 @@ import (
 	"zcash-obs-db/util"
 )
 
+func SQLSelectCurrentFork() bool {
+	DBMutex.Lock()
+	ret, err := DBConnection.Query(
+		`SELECT
+			COUNT(height)
+		FROM blocks
+		WHERE height = (SELECT MAX(height) FROM blocks);`,
+	)
+	DBMutex.Unlock()
+	if err != nil {
+		log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+		return false
+	}
+
+	num_blocks := 0
+	for ret.Next() {
+		ret.Scan(&num_blocks)
+	}
+
+	if num_blocks > 1 {
+		return true
+	}
+
+	return false
+}
+
 func SQLSelectRecentForks(n int) []util.ForkMessage {
 	DBMutex.Lock()
 	ret, err := DBConnection.Query(
@@ -125,9 +151,9 @@ func SQLSelectRangeForks(nMinHeight int, nMaxHeight int) []util.ForkMessage {
 				height,
 				COUNT(height) n
 			FROM blocks
+			WHERE height BETWEEN ? AND ?
 			GROUP BY height
-			HAVING n > 1
-			WHERE height BETWEEN ? AND ?) as b2
+			HAVING n > 1) as b2
 		ON b1.height = b2.height;`,
 		nMinHeight, nMaxHeight,
 	)
@@ -168,8 +194,6 @@ func SQLSelectRangeForks(nMinHeight int, nMaxHeight int) []util.ForkMessage {
 			&(fork_buffer.Fork_height),
 			&(fork_buffer.Fork_size),
 		)
-
-		log.Println(fork_buffer)
 
 		if index, ok := seen_forks[fork_buffer.Block_height]; ok {
 			// fork seen

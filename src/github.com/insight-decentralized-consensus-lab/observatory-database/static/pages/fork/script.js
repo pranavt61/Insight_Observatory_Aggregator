@@ -11,7 +11,7 @@ $(document).ready(function() {
         $("#TitleHeader").append("Fork " + min_height);
 
         // make request
-        $.get("/rangeblocks?min_height=" + min_height + "&max_height=" + max_height, function(data, status) {
+        $.get("/v1/json/getblocksbyheightrange?min_height=" + min_height + "&max_height=" + max_height, function(data, status) {
             let fork = JSON.parse(data);
             fork.sort((a, b) => {return a.network_time - b.network_time});
             console.log(fork);
@@ -21,13 +21,16 @@ $(document).ready(function() {
             let main_chain = "";
             for (let i = fork.length - 1; i >= 0; i --) {
 
+                let time = new Date(fork[i].network_time);
+
                 if (main_chain == "" || fork[i].hash == main_chain) {
                     // main chain
                     block_list += `
                         <tr class="table-success">
                             <th scope="row">` + fork[i].height + `</th>
-                            <td>` + fork[i].hash + `</td>
-                            <td>` + $.timeago(new Date(fork[i].network_time)) + `</td>
+
+                            <td><a class="text-secondary" href="/block?hash=` + fork[i].hash + `">` + fork[i].hash + `</a></td>
+                            <td>` + time.toString() + `</td>
                         </tr>`
                     main_chain = fork[i].prev_hash;
                 } else {
@@ -35,8 +38,8 @@ $(document).ready(function() {
                     block_list += `
                         <tr class="table-danger">
                             <th scope="row">` + fork[i].height + `</th>
-                            <td>` + fork[i].hash + `</td>
-                            <td>` + $.timeago(new Date(fork[i].network_time)) + `</td>
+                            <td><a class="text-secondary" href="/block?hash=` + fork[i].hash + `">` + fork[i].hash + `</a></td>
+                            <td>` + time.toString() + `</td>
                         </tr>`
                 }
             }

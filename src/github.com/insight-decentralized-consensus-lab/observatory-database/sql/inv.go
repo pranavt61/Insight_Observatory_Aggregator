@@ -37,3 +37,33 @@ func SQLInsertInv(inv util.InvMessage) {
 	stmt.Close()
 	return
 }
+
+func SQLSelectAllInvHalfRange() []uint64 {
+	DBMutex.Lock()
+	ret, err := DBConnection.Query(
+		`SELECT
+			MIN(network_time) as smallest,
+			AVG(network_time) as average
+		FROM inv 
+		GROUP BY inv.hash;`,
+	)
+	DBMutex.Unlock()
+	if err != nil {
+		log.Printf("SQL Statement Prepare Error: %s\n", err.Error())
+		return nil
+	}
+
+	times := make([]uint64, 0)
+	var smallest_buffer uint64 = 0
+	var average_buffer float64 = 0.0
+	for ret.Next() {
+		ret.Scan(
+			&smallest_buffer,
+			&average_buffer,
+		)
+
+		times = append(times, (uint64(average_buffer) - smallest_buffer))
+	}
+
+	return times
+}

@@ -33,11 +33,18 @@ func StartJSONServer() {
 
 	//-- JSON --//
 	// Blocks
+	http.HandleFunc("/v1/json/currentheight", HandleCurrentHeight)
+	http.HandleFunc("/v1/json/getblockbyhash", HandleGetBlockByHash)
+	http.HandleFunc("/v1/json/getblocksbyheightrange", HandleGetBlocksByHeightRange)
 	http.HandleFunc("/v1/json/recentblocks", HandleRecentBlocks)
 
 	// Forks
+	http.HandleFunc("/v1/json/currentfork", HandleCurrentFork)
 	http.HandleFunc("/v1/json/recentforks", HandleRecentForks)
 	http.HandleFunc("/v1/json/rangeforks", HandleRangeForks)
+
+	// Inv
+	http.HandleFunc("/v1/json/allinvhalfrange", HandleAllInvHalfRange)
 
 	if err := JSONServer.ListenAndServe(); err != nil {
 		fmt.Printf("JSON server Shutdown: %s\n", err.Error())

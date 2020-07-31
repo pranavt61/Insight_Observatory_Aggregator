@@ -10,6 +10,17 @@ import (
 	"zcash-obs-db/util"
 )
 
+func HandleCurrentFork(w http.ResponseWriter, r *http.Request) {
+	var current_fork bool = sql.SQLSelectCurrentFork()
+
+	var raw string = "false"
+	if current_fork {
+		raw = "true"
+	}
+
+	fmt.Fprintf(w, raw)
+}
+
 func HandleRecentForks(w http.ResponseWriter, r *http.Request) {
 	// parse query
 	var mQueryValues map[string][]string = r.URL.Query()

@@ -56,8 +56,80 @@ let updateTables = () => {
 
     });
 
+    console.log("Tables Updated");
+};
+
+let updateCharts = () => {
+
+    // Block Prop Time Chart
+    let BlockPropTimeCtx = document.getElementById('ChartPropTime').getContext('2d');
+    $.get("/v1/json/allinvhalfrange", function(data, status){
+        let times = JSON.parse(data);
+
+        let num_bars = 10;
+        let bars = [0,0,0,0,0,0,0,0,0,0];
+        let max_time = Math.max(...times);
+        for (let i = 0; i < times.length; i ++) {
+            bars[Math.min(Math.floor(bars.length * times[i]/max_time), num_bars - 1)] ++;
+        }
+
+        let labels = [];
+        for (let i = 0; i < bars.length; i ++) {
+            let l = Math.floor(i * (max_time) / num_bars) / 1000;
+            labels.push(l.toString());
+        }
+
+        let config = {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Observed Block Propigation Time',
+                    data: bars,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)'
+
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true
+                        }
+                    }]
+                }
+            }
+        };
+
+        let myChart = new Chart(BlockPropTimeCtx, config);
+    });
+
     // Block Size Chart
-    let ctx = document.getElementById('myChart').getContext('2d');
+    let BlockSizeCtx = document.getElementById('ChartBlockSize').getContext('2d');
     $.get("/v1/json/recentblocks?n=100&with_inv=false", function(data, status){
         let blocks = JSON.parse(data);
 
@@ -119,20 +191,95 @@ let updateTables = () => {
             }
         };
 
-        let myChart = new Chart(ctx, config);
-
+        let myChart = new Chart(BlockSizeCtx, config);
     });
 
-    console.log("Tables Updated");
-}
+    let ForkFreqCtx = document.getElementById('ChartForkFreq').getContext('2d');
+    $.get("/v1/json/currentheight", function(data, status){
+        let max_height = parseInt(data);
+
+        let min_height = 889208
+
+        $.get("/v1/json/rangeforks?min_height=" + min_height + "&max_height=" + max_height, function(data,status){
+            let forks = JSON.parse(data);
+
+            let heights = [];
+            for (let i = 0; i < forks.length; i ++) {
+                heights.push(forks[i].height);
+            }
+
+            let num_bars = 10;
+            let bars = [0,0,0,0,0,0,0,0,0,0];
+            for (let i = 0; i < heights.length; i ++) {
+                bars[Math.min(Math.floor(num_bars * ((heights[i] - min_height) / (max_height - min_height))), num_bars - 1)] ++;
+            }
+
+            let labels = [];
+            for (let i = 0; i < bars.length; i ++) {
+                let l = min_height + Math.floor(i * (max_height - min_height) / num_bars);
+                labels.push(l.toString());
+            }
+
+            let config = {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Fork Freq by Height',
+                        data: bars,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.2)',
+                            'rgba(54, 162, 235, 0.2)',
+                            'rgba(255, 206, 86, 0.2)',
+                            'rgba(75, 192, 192, 0.2)',
+                            'rgba(153, 102, 255, 0.2)',
+                            'rgba(255, 159, 64, 0.2)',
+                            'rgba(255, 206, 86, 0.2)',
+                            'rgba(75, 192, 192, 0.2)',
+                            'rgba(153, 102, 255, 0.2)',
+                            'rgba(255, 159, 64, 0.2)'
+
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true
+                            }
+                        }]
+                    }
+                }
+            };
+
+            let myChart = new Chart(ForkFreqCtx, config);
+
+        });
+    });
+};
 
 $(document).ready(function() {
 
     $("time.timeago").timeago();
 
     updateTables();
+    updateCharts();
 
-    // window.setInterval(updateTables, 5000);
+    window.setInterval(updateTables, 5000);
 });
 
 

@@ -5,17 +5,14 @@ $(document).ready(function() {
     if (searchParams.has("hash")) {
         block_hash = searchParams.get("hash");
         
-        $.get("/hashblocks?hash=" + block_hash, function(data, status){
+        $.get("/v1/json/getblockbyhash?hash=" + block_hash, function(data, status){
             var block = JSON.parse(data);
 
-            if (block.length == 0) {
+            if (block.height == 0) {
                 // ERR
                 $("#TitleHeader").append("404")
                 return;
             }
-
-            block = block[0];
-
 
             $("#TitleHeader").append("Block " + block.height)
 
